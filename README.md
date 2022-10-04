@@ -7,12 +7,12 @@ Appeared at [AI for Earth and Space Science workshop, ICLR 2022](https://ai4eart
 <img src="/imgs/mlp_architecture.png" width="320" height="200" />
 </p>
 
-- an Autoencoder where we replace the decoder with a regression head after training
+- an MLP Autoencoder where we replace the decoder with a regression head after training
 <p align = "center">
 <img src="/imgs/autoencoder_architecture.png" width="450" height="250" />
 </p>
 
-- a dual-head Autoencoder which optimizes the reconstruction and prediction losses simultaneously
+- an MLP dual-head Autoencoder which optimizes the reconstruction and prediction losses simultaneously
 <p align = "center">
 <img src="/imgs/dual_head_autoencoder_architecture.png" width="450" height="250"/>
 </p>
