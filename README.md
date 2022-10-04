@@ -1,3 +1,3 @@
 # Learning-latent-representations-for-nitrogen-response-rate-prediction
 
-Appeared at [AI for Earth and Space Science workshop, ICLR 2022](https://ai4earthscience.github.io/iclr-2022-workshop/)
+Appeared at [AI for Earth and Space Science workshop, ICLR 2022](https://ai4earthscience.github.io/iclr-2022-workshop/). In this paper we examined if our [previously proposed method](https://www.sciencedirect.com/science/article/pii/S1364815221003169) to overcome data quantity and resolution issues is able to work independently of the machine learning algorithm used to make predictions. We compared a Multilayer Perceptron, an Autoencoder where we replace the decoder with a regression head after training, and a dual-head Autoencoder which optimizes reconstruction loss and prediction loss simultaneously, against a reference Random Forest model for nitrogen response rate prediction.
