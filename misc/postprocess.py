@@ -28,7 +28,6 @@ def standardize_values(train_df, validation_df, test_df, scaler):
     Standardizes the training data, then the validation test data based on the training scaler. If a scaler is provided it standardizes everything based on it
     '''
     
-    #seperate the case where we use observations with an already made scaler
     if scaler == None:
         scaler = StandardScaler()
         scaler.fit(train_df)
