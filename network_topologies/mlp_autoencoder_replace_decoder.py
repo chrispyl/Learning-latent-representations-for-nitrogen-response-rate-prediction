@@ -93,10 +93,8 @@ class NRRRegressor(T.nn.Module):
     def forward(self, x):
         x = self.linear1(x)
         x = F.leaky_relu(x)
-        #x = F.dropout(x, 0.2)
         x = self.linear2(x)
         x = F.leaky_relu(x)
-        #x = F.dropout(x, 0.2)
         x = self.linear3(x)
         return x
 
@@ -111,6 +109,8 @@ class Encoder(T.nn.Module):
         Hidden layer
     linear3 : torch.nn.modules.linear.Linear
         Output layer, outputs the bottleneck
+    dropout : torch.nn.modules.dropout.Dropout
+        Dropout layer    
     '''
     
     def __init__(self, latent_dims):
@@ -118,7 +118,8 @@ class Encoder(T.nn.Module):
         self.linear1 = T.nn.Linear(425, 300)
         self.linear2 = T.nn.Linear(300, 200)
         self.linear3 = T.nn.Linear(200, latent_dims)
-
+        self.dropout = T.nn.Dropout(p=0.1)
+        
         #weight and bias initialization
         T.nn.init.kaiming_uniform_(self.linear1.weight)
         T.nn.init.ones_(self.linear1.bias)
@@ -133,13 +134,13 @@ class Encoder(T.nn.Module):
         rescon_l1 = x
         
         x = F.leaky_relu(x)
-        x = F.dropout(x, 0.1)
+        x = self.dropout(x)
         x = self.linear2(x)
         
         rescon_l2 = x
         
         x = F.leaky_relu(x)
-        x = F.dropout(x, 0.1)
+        x = self.dropout(x)
         x = self.linear3(x)                
         x = F.leaky_relu(x)
         
@@ -156,6 +157,8 @@ class Decoder(T.nn.Module):
         Hidden layer
     linear3 : torch.nn.modules.linear.Linear
         Output layer, outputs the bottleneck
+    dropout : torch.nn.modules.dropout.Dropout
+        Dropout layer    
     '''
     
     def __init__(self, latent_dims):
@@ -163,7 +166,8 @@ class Decoder(T.nn.Module):
         self.linear1 = T.nn.Linear(latent_dims, 200)
         self.linear2 = T.nn.Linear(200, 300)
         self.linear3 = T.nn.Linear(300, 425)
-
+        self.dropout = T.nn.Dropout(p=0.1)
+        
         #weight and bias initialization
         T.nn.init.kaiming_uniform_(self.linear1.weight)
         T.nn.init.ones_(self.linear1.bias)
@@ -179,14 +183,14 @@ class Decoder(T.nn.Module):
         x = x + rescon_l2
         x = F.leaky_relu(x)
         
-        x = F.dropout(x, 0.1)
+        x = self.dropout(x)
         x = self.linear2(x)
         x = F.leaky_relu(x)
         
         x = x + rescon_l1
         x = F.leaky_relu(x)
         
-        x = F.dropout(x, 0.1)
+        x = self.dropout(x)
         x = self.linear3(x)
         return x
 

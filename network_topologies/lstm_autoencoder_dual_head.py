@@ -80,11 +80,9 @@ class NRRRegressor(T.nn.Module):
     def forward(self, x):
         x = self.linear1(x)
         x = F.leaky_relu(x)
-        #x = F.dropout(x, 0.3)
         
         x = self.linear2(x)
         x = F.leaky_relu(x)
-        #x = F.dropout(x, 0.3)
         
         x = self.linear3(x)
         
@@ -101,6 +99,8 @@ class Encoder(T.nn.Module):
         Hidden layer
     lstm3 : torch.nn.modules.rnn.LSTM
         Output layer, outputs the bottleneck
+    dropout : torch.nn.modules.dropout.Dropout
+        Dropout layer
     '''
     
     #'features_num' (int) is the number of features on the input of lstm1
@@ -121,6 +121,7 @@ class Encoder(T.nn.Module):
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)                        
+        self.dropout = T.nn.Dropout(p=0.3)
         
         #weight and bias initialization
         for lstm in [self.lstm1, self.lstm2, self.lstm3]:
@@ -132,7 +133,7 @@ class Encoder(T.nn.Module):
     def forward(self, x):
         
         #batch size x sequence length x number of features 
-        x = F.dropout(x, 0.3)
+        x = self.dropout(x)
         
         x, (hn, cn) = self.lstm1(x)
         rescon1 = x #residual connection 1 to decoder

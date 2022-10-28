@@ -51,6 +51,8 @@ class NRRRegressor(T.nn.Module):
         Hidden layer
     self.linear3 : torch.nn.modules.linear.Linear
         Output layer
+    dropout : torch.nn.modules.dropout.Dropout
+        Dropout layer    
     '''
     
     def __init__(self, latent_dims):
@@ -58,7 +60,8 @@ class NRRRegressor(T.nn.Module):
         self.linear1 = T.nn.Linear(latent_dims, 480)
         self.linear2 = T.nn.Linear(480, 480)
         self.linear3 = T.nn.Linear(480, 1)
-
+        self.dropout = T.nn.Dropout(p=0.2)
+        
         #weight and bias initialization
         T.nn.init.kaiming_uniform_(self.linear1.weight)
         T.nn.init.ones_(self.linear1.bias)
@@ -70,10 +73,10 @@ class NRRRegressor(T.nn.Module):
     def forward(self, x):
         x = self.linear1(x)
         x = F.leaky_relu(x)
-        x = F.dropout(x, 0.2)
+        x = self.dropout(x)
         x = self.linear2(x)
         x = F.leaky_relu(x)
-        x = F.dropout(x, 0.2)
+        x = self.dropout(x)
         x = self.linear3(x)
         return x
 
