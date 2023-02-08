@@ -59,12 +59,12 @@ class NRRRegressor(T.nn.Module):
         Output layer
     '''
     
-    def __init__(self):
+    #'bottleneck_features' (int) is the number of features on the output of the encoder
+    #'timesteps' (int) is the number of days in each timeseries
+    #'scalars_n' (int) is the total number of scalars
+    def __init__(self, bottleneck_features, timesteps, scalars_n):
         super().__init__()
-        bottleneck_features = 4 #number of features on the output of the autoencoder's encoder
-        timesteps = 28 #number of steps in timeseries
-        scalars = 5 #number of scalars
-        total_inputs = bottleneck_features * timesteps + scalars #timeseries and scalars will go together as input to the input layer
+        total_inputs = bottleneck_features * timesteps + scalars_n #timeseries and scalars will go together as input to the input layer
         self.linear1 = T.nn.Linear(total_inputs, total_inputs//2)
         self.linear2 = T.nn.Linear(total_inputs//2, total_inputs//4)
         self.linear3 = T.nn.Linear(total_inputs//4, 1)
@@ -103,21 +103,21 @@ class Encoder(T.nn.Module):
         Dropout layer
     '''
     
-    #'features_num' (int) is the number of features on the input of lstm1
-    def __init__(self, features_num):
+    #'timeseries_n' (int) is the number of variables on the input of lstm1
+    def __init__(self, timeseries_n):
         super().__init__()
-        self.lstm1 = T.nn.LSTM(input_size = features_num, 
-                                hidden_size = math.ceil(features_num*0.75),
+        self.lstm1 = T.nn.LSTM(input_size = timeseries_n, 
+                                hidden_size = math.ceil(timeseries_n*0.75),
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)
-        self.lstm2 = T.nn.LSTM(input_size = math.ceil(features_num*0.75), 
-                                hidden_size = math.ceil(features_num*0.5),
+        self.lstm2 = T.nn.LSTM(input_size = math.ceil(timeseries_n*0.75), 
+                                hidden_size = math.ceil(timeseries_n*0.5),
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)
-        self.lstm3 = T.nn.LSTM(input_size = math.ceil(features_num*0.5), 
-                                hidden_size = math.ceil(features_num*0.25),
+        self.lstm3 = T.nn.LSTM(input_size = math.ceil(timeseries_n*0.5), 
+                                hidden_size = math.ceil(timeseries_n*0.25),
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)                        
@@ -156,21 +156,21 @@ class Decoder(T.nn.Module):
         Output layer, outputs the bottleneck
     '''
     
-    #'features_num' is the number of features on the input of lstm1
-    def __init__(self, features_num):
+    #'timeseries_n' (int) is the number of variables on the input of lstm1
+    def __init__(self, timeseries_n):
         super().__init__()
-        self.lstm1 = T.nn.LSTM(input_size = math.ceil(features_num*0.25), 
-                                hidden_size = math.ceil(features_num*0.50),
+        self.lstm1 = T.nn.LSTM(input_size = math.ceil(timeseries_n*0.25), 
+                                hidden_size = math.ceil(timeseries_n*0.5),
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)
-        self.lstm2 = T.nn.LSTM(input_size = math.ceil(features_num*0.50), 
-                                hidden_size = math.ceil(features_num*0.75),
+        self.lstm2 = T.nn.LSTM(input_size = math.ceil(timeseries_n*0.5), 
+                                hidden_size = math.ceil(timeseries_n*0.75),
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)
-        self.lstm3 = T.nn.LSTM(input_size = math.ceil(features_num*0.75), 
-                                hidden_size = features_num,
+        self.lstm3 = T.nn.LSTM(input_size = math.ceil(timeseries_n*0.75), 
+                                hidden_size = timeseries_n,
                                 num_layers=1,
                                 dropout=0,
                                 batch_first=True)
@@ -209,12 +209,15 @@ class DualHeadAutoencoder(T.nn.Module):
         regressor module
     '''
     
-    #'features_num' is the number of features on the input of lstm1
-    def __init__(self, features_num = 15):
+    #'bottleneck_features' (int) is the number of features on the output of the encoder
+    #'timesteps' (int) is the number of days in each timeseries
+    #'timeseries_n' (int) is the number of variables on the input of lstm1
+    #'scalars_n' (int) is the total number of scalars
+    def __init__(self, bottleneck_features, timesteps, timeseries_n, scalars_n):
         super().__init__()
-        self.encoder = Encoder(features_num)
-        self.decoder = Decoder(features_num)
-        self.regressor = NRRRegressor()
+        self.encoder = Encoder(timeseries_n)
+        self.decoder = Decoder(timeseries_n)
+        self.regressor = NRRRegressor(bottleneck_features, timesteps, scalars_n)
 
     def forward(self, x_timeseries, x_scalars):
         [enc_out, rescon1, rescon2] = self.encoder(x_timeseries)
@@ -228,9 +231,10 @@ class DualHeadAutoencoder(T.nn.Module):
         return [dec_out, nrr_out] #outputs the reconstructed input and the output of the regression head
     
 
-def validate(net, dataloader, loss):
+def validate(device, net, dataloader, loss):
     '''Returns  list
     
+    device: torch.device, cpu or gpu mode
     net: DualHeadAutoencoder, the network under validation
     dataloader: torch.utils.data.dataloader.DataLoader, the dataloader of the validation set
     loss: torch.nn.MSELoss, loss function
@@ -244,20 +248,21 @@ def validate(net, dataloader, loss):
             net.train(mode=False)
             for i, (x_timeseries, x_scalars, y_nrr, rest) in enumerate(dataloader):
                 
-                x_timeseries = x_timeseries.float()
-                x_scalars = x_scalars.float()                
-                y_nrr = y_nrr.float()               
+                x_timeseries = x_timeseries.float().to(device)
+                x_scalars = x_scalars.float().to(device)                
+                y_nrr = y_nrr.float().to(device)               
                 
                 dec_out, nrr_out = net(x_timeseries, x_scalars)
                 l = loss(dec_out, x_timeseries) + loss(nrr_out, y_nrr.unsqueeze(1))
 
-                validation_losses.append(l.item())
+                validation_losses.append(l.cpu())
                             
     return validation_losses
 
-def train(net, train_dataloader, validation_dataloader, num_epochs, early_stopping_patience, tensorboard_writer):
+def train(device, net, train_dataloader, validation_dataloader, num_epochs, early_stopping_patience, tensorboard_writer):
     '''Returns a tuple containing the trained network, average training loss per epoch, average validation loss per epoch
     
+    device: torch.device, cpu or gpu mode
     net: DualHeadAutoencoder, the network to be trained
     train_dataloader: torch.utils.data.dataloader.DataLoader, the dataloader of the training set
     validation_dataloader: torch.utils.data.dataloader.DataLoader, the dataloader of the validation set
@@ -282,20 +287,13 @@ def train(net, train_dataloader, validation_dataloader, num_epochs, early_stoppi
     for epoch in range(num_epochs):
     
         net.train(mode=True)
-        training_losses=[]
-        
-        #continue training?
-        if epoch > 0:
-            with open('continue_training.txt') as f:
-                first_line = f.readline()
-                if first_line.strip().lower() == 'stop':
-                    break    
+        training_losses=[] 
         
         for i, (x_timeseries, x_scalars, y_nrr, rest) in enumerate(train_dataloader):
             
-            x_timeseries = x_timeseries.float()
-            x_scalars = x_scalars.float()
-            y_nrr = y_nrr.float()       
+            x_timeseries = x_timeseries.float().to(device)
+            x_scalars = x_scalars.float().to(device)
+            y_nrr = y_nrr.float().to(device)       
             
             dec_out, nrr_out = net(x_timeseries, x_scalars)
             l = loss(dec_out, x_timeseries) + loss(nrr_out, y_nrr.unsqueeze(1))
@@ -304,7 +302,7 @@ def train(net, train_dataloader, validation_dataloader, num_epochs, early_stoppi
             l.backward()
             optimizer.step()
             
-            training_losses.append(l.item())
+            training_losses.append(l.detach().cpu())
             
         validation_losses = validate(net, validation_dataloader, loss)        
                         
@@ -324,9 +322,10 @@ def train(net, train_dataloader, validation_dataloader, num_epochs, early_stoppi
     
     return net, avg_train_losses, avg_valid_losses
             
-def test(net, dataloader, type):
+def test(device, net, dataloader, type):
     '''Returns a tuple containing either the recostruction and regression rmses, or the reconstruction and regression rmses and a dataframe with the test data including the prediction for each sample 
     
+    device: torch.device, cpu or gpu mode
     net: DualHeadAutoencoder, the network to be trained
     dataloader: torch.utils.data.dataloader.DataLoader, a training or test dataloader
     type: str, 'test' or 'training', if 'test' then it creates the test dataframe
@@ -346,12 +345,13 @@ def test(net, dataloader, type):
         
         for i, (x_timeseries, x_scalars, y_nrr, rest) in enumerate(dataloader):
 
+            #show progress but don't print all iterations
             if i>0 and i%500 == 0:
-                print('Testing : iteration ' + str(i))
+                print(f'Testing : iteration {str(i)}')
                                 
-            x_timeseries = x_timeseries.float()            
-            x_scalars = x_scalars.float()
-            y_nrr = y_nrr.float()       
+            x_timeseries = x_timeseries.float().to(device)            
+            x_scalars = x_scalars.float().to(device)
+            y_nrr = y_nrr.float().to(device)       
                   
             #prediction = net(x)
             dec_pred, nrr_pred = net(x_timeseries, x_scalars)          
@@ -359,16 +359,15 @@ def test(net, dataloader, type):
             squared_error_dec = (dec_pred-x_timeseries)**2
             squared_error_nrr = (nrr_pred-y_nrr)**2
  
-            errors_dec = np.append(errors_dec, squared_error_dec.detach())
-            errors_nrr = np.append(errors_nrr, squared_error_nrr.detach())
+            errors_dec = np.append(errors_dec, squared_error_dec.cpu())
+            errors_nrr = np.append(errors_nrr, squared_error_nrr.cpu())
             
             if type=='test':
                 results_tensor = T.cat((results_tensor, 
                                         T.cat((rest, 
-                                                y_nrr.unsqueeze(1),
-                                                nrr_pred,
-                                                T.abs(y_nrr.unsqueeze(1)-nrr_pred)), dim=1)), dim = 0)
-                results_tensor=results_tensor.detach()
+                                                y_nrr.unsqueeze(1).cpu(),
+                                                nrr_pred.cpu(),
+                                                T.abs(y_nrr.unsqueeze(1).cpu()-nrr_pred.cpu())), dim=1)), dim = 0)
             
         error_dec = math.sqrt(errors_dec.mean())
         error_nrr = math.sqrt(errors_nrr.mean())
@@ -378,14 +377,18 @@ def test(net, dataloader, type):
         else:
             return [error_dec, error_nrr]
 
-def run(scenario_id, batch_size, epochs, patience, timesteps, train_clims, validation_clims, test_clim, metamodel_type, test_type, scenario_folder, filename_train, filename_validate, filename_test, irrigation, base_path, save_path):
+def run(device, scenario_id, batch_size, epochs, patience, bottleneck_features, timeseries_n, timesteps, scalars_n, train_clims, validation_clims, test_clim, metamodel_type, test_type, scenario_folder, filename_train, filename_validate, filename_test, irrigation, base_path, save_path):
     '''Returns None
     
+    device: torch.device, cpu or gpu mode
     scenario_id: str, training scenario identifier
     batch_size: int, batch size for training validation test
     epochs: int, how many epochs to train
     patience: int, how many epochs to continue with consecutive validation losses above the lowest validation loss
+    bottleneck_features: 
+    timeseries_n
     timesteps: int, steps of the timeseries features
+    scalars_n
     train_clims: list, in which climates to train
     validation_clims: list, in which climates to validate
     test_clim: str, in which climate to test
@@ -421,24 +424,24 @@ def run(scenario_id, batch_size, epochs, patience, timesteps, train_clims, valid
     
     
     #initialize the net
-    net = DualHeadAutoencoder()
+    net = DualHeadAutoencoder(bottleneck_features, timesteps, timeseries_n, scalars_n)
     net.to(device)
     
     #train the net
-    net, avg_train_losses, avg_valid_losses = train(net, train_dataloader, validation_dataloader, epochs, patience, tensorboard_writer)
+    net, avg_train_losses, avg_valid_losses = train(device, net, train_dataloader, validation_dataloader, epochs, patience, tensorboard_writer)
     T.save(net.encoder.state_dict(), 'saved_encoder.pt')
     
     #load best network state
-    checkpointed_net = DualHeadAutoencoder()
+    checkpointed_net = DualHeadAutoencoder(bottleneck_features, timesteps, timeseries_n, scalars_n)
     checkpointed_net.load_state_dict(T.load('model_checkpoint.pt'))
     
     #show training error
-    training_error_dec, training_error_nrr = test(checkpointed_net, train_dataloader, 'training')
+    training_error_dec, training_error_nrr = test(device, checkpointed_net, train_dataloader, 'training')
     s_f_tr = scenario_id + ', ' + 'Checkpointed net train rmse:' + str(training_error_dec) + ' ' + str(training_error_nrr)
     print(s_f_tr)
     
     #show test error
-    testing_error_dec, testing_error_nrr, testing_predictions_df = test(checkpointed_net, test_dataloader, 'test')
+    testing_error_dec, testing_error_nrr, testing_predictions_df = test(device, checkpointed_net, test_dataloader, 'test')
     s_f_te = scenario_id + ', ' + 'Checkpointed net test rmse:' + str(testing_error_dec) + ' ' + str(testing_error_nrr)
     print(s_f_te)
 
@@ -458,9 +461,9 @@ def run(scenario_id, batch_size, epochs, patience, timesteps, train_clims, valid
 
 
 if __name__ == '__main__':
-    device =  T.device('cpu')
+    device =  T.device('cuda' if T.cuda.is_available() else 'cpu')
     
-    print('Started at' , get_datetime())       
+    print(f'Started at {get_datetime()}')       
     
     base_path = '...'
     
@@ -476,14 +479,18 @@ if __name__ == '__main__':
                         'test_standardized_fert_soilwater.csv', \
                         'both']]:
             
-        print('Testing in:', test_clim)
-        print('Irrigation:', irrigation)
+        print(f'Testing in: {test_clim}')
+        print(f'Irrigation: {irrigation}')
 
-        run(scenario_id = '',
+        run(device = device,
+            scenario_id = '...',
             batch_size = 32 , 
             epochs = 50,
             patience = 300,
+            bottleneck_features = 4,
+            timeseries_n = 15,
             timesteps = 28,
+            scalars_n = 5,
             train_clims = train_clims,
             validation_clims = validation_clims,
             test_clim = test_clim,
@@ -497,7 +504,7 @@ if __name__ == '__main__':
             base_path = base_path,
             save_path = base_path + 'predictions/' + test_clim + '/' + scenario_folder + '/res_autoencoder_multitask_adamw_fert_soilwater_LSTM/' + test_type + '/' + metamodel_type + '/')
 
-    print('Ended at ' , get_datetime())  
+    print(f'Ended at {get_datetime()}')  
 
 
 
